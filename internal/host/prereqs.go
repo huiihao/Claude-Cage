@@ -45,13 +45,23 @@ func qemuBinaryFor(goarch, manager string) (bin, install string) {
 // WSLVersion is 2 or 1 under WSL, from the kernel release, 0 elsewhere.
 func WSLVersion() int {
 	b, err := os.ReadFile("/proc/sys/kernel/osrelease")
-	rel := string(b)
-	switch {
-	case err != nil:
+	if err != nil {
 		return 0
-	case strings.Contains(rel, "WSL2"):
+	}
+	return wslVersionFromRelease(string(b))
+}
+
+// wslVersionFromRelease tells WSL2 from WSL1 by the kernel's release string.
+// WSL2 runs a "microsoft-standard" kernel; later builds append "-WSL2", but
+// early and custom WSL2 kernels do not, so the suffix alone is not enough.
+// WSL1's kernel is a Microsoft-suffixed Linux release such as
+// "4.4.0-19041-Microsoft".
+func wslVersionFromRelease(release string) int {
+	rel := strings.ToLower(strings.TrimSpace(release))
+	switch {
+	case strings.Contains(rel, "wsl2"), strings.Contains(rel, "microsoft-standard"):
 		return 2
-	case strings.Contains(strings.ToLower(rel), "microsoft"):
+	case strings.Contains(rel, "microsoft"):
 		return 1
 	}
 	return 0
@@ -84,7 +94,7 @@ func LinuxPrereqs(w io.Writer) bool {
 		case 1:
 			fmt.Fprintln(w, "  This looks like WSL1, which cannot run VMs.\n  Upgrade the distribution to WSL2: wsl --set-version <distro> 2")
 		case 2:
-			fmt.Fprintln(w, "  This looks like WSL2 without nested virtualization: KVM is not\n  passed through from the Windows host. Update WSL (wsl --update),\n  enable virtualization on the host, then retry.")
+			fmt.Fprintln(w, "  This looks like WSL2 without nested virtualization: KVM is not\n  passed through from the Windows host. Update WSL (wsl --update), add\n  [wsl2] nestedVirtualization=true to .wslconfig in the Windows user\n  profile, run wsl --shutdown, and ensure hardware virtualization is\n  enabled in Windows; then retry.")
 		default:
 			fmt.Fprintln(w, "  Hardware virtualization may be disabled in BIOS, or the kernel\n  lacks KVM support (nested virt in a guest VM, etc.).")
 		}
